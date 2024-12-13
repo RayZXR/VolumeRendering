@@ -584,6 +584,7 @@ __global__ void d_renderReSTIR(curandState* d_randStates) {
 	// Accumulate
 	if (d_params.d_iteration == 0 || d_params.camera.changed == false) {
 		// No camera moving
+
 		int sampleN = 0;
 		float4 value = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 		if (reservoir.N < N_max) {
@@ -597,7 +598,7 @@ __global__ void d_renderReSTIR(curandState* d_randStates) {
 			double alpha = (double)reservoir.N / (reservoir.N + sampleN);
 			reservoir.pixel = (1.0 - alpha) * value + alpha * reservoir.pixel;
 			reservoir.N += sampleN;
-			++reservoir.itr;
+			// ++reservoir.itr;
 		}
 
 		// For test
@@ -606,9 +607,12 @@ __global__ void d_renderReSTIR(curandState* d_randStates) {
 		//	float fac = (float)sampleN / N_min;
 		//	reservoir.pixel = fac * make_float4(1.0f, 0.0f, 0.0f, 1.0f) + (1.0f - fac) * make_float4(1.0f, 1.0f, 1.0f, 1.0f);
 		//}
+
 	} else {
 		// Camera moved
-		int reuse = 0;
+
+		int reuse = 0;		// Reuse flag
+
 		if (isfinite(reservoir.repDepthPos.x)) {
 			float2 relPixel = getScreenPos(reservoir.repDepthPos, d_prevCamera);	// Get relative pixel in previous frame
 
@@ -619,43 +623,24 @@ __global__ void d_renderReSTIR(curandState* d_randStates) {
 				reservoir.accErr = relReservoir.accErr + err;
 
 				if (err > 0.038f) {
+					// Accumulated error reaches threshold
+
+					reuse = 0;
 
 				} else if (reservoir.accErr > 0.076f) {
+					// Single error reaches threshold
+
 					reuse = 2;
 
 					relReservoir.N /= 2;
 					reservoir.accErr = relReservoir.accErr / 2.0f + err;
-					
-					int sampleN = 0;
-					float4 value = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-					if (relReservoir.N < N_max) {
-						sampleN = max(N_min - (int)relReservoir.N, min(N_max - (int)relReservoir.N, N_norm));
-						for (int i = 0; i < sampleN; ++i) {
-							value += traceVolume(ray, boxMin, boxMax, hasIntr, randState);
-						}
-						value /= (float)sampleN;
-						value.w = 1.0f;
-
-						double alpha = (double)relReservoir.N / (relReservoir.N + sampleN);
-						reservoir.pixel = (1.0 - alpha) * value + alpha * relReservoir.pixel;
-						reservoir.N = relReservoir.N + sampleN;
-					}
-
-					// For test
-					//value = traceVolume(ray, boxMin, boxMax, hasIntr, randState);
-					//if (hasIntr) {
-					//	float fac = (float)sampleN / N_min;
-					//	reservoir.pixel = fac * make_float4(1.0f, 0.0f, 0.0f, 1.0f) + (1.0f - fac) * make_float4(1.0f, 1.0f, 1.0f, 1.0f);
-					//}
-
-					double alphaErr = (double)(relReservoir.itr) / (relReservoir.itr + 1);
-					reservoir.repDepthPos = (1.0 - alphaErr) * reservoir.repDepthPos + alphaErr * relReservoir.repDepthPos;
-					reservoir.repDepth = (1.0 - alphaErr) * reservoir.repDepth + alphaErr * relReservoir.repDepth;
-					reservoir.repDir = (1.0 - alphaErr) * reservoir.repDir + alphaErr * relReservoir.repDir;
-					++reservoir.itr;
 				} else {
-					reuse = 1;
+					// Totally reuse
 
+					reuse = 1;
+				}
+
+				if (reuse) {
 					int sampleN = 0;
 					float4 value = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 					if (relReservoir.N < N_max) {
@@ -678,15 +663,17 @@ __global__ void d_renderReSTIR(curandState* d_randStates) {
 					//	reservoir.pixel = fac * make_float4(1.0f, 0.0f, 0.0f, 1.0f) + (1.0f - fac) * make_float4(1.0f, 1.0f, 1.0f, 1.0f);
 					//}
 
-					double alphaErr = (double)(relReservoir.itr) / (relReservoir.itr + 1);
+					double alphaErr = (double)(relReservoir.N) / (relReservoir.N + max(sampleN, 1));
 					reservoir.repDepthPos = (1.0 - alphaErr) * reservoir.repDepthPos + alphaErr * relReservoir.repDepthPos;
 					reservoir.repDepth = (1.0 - alphaErr) * reservoir.repDepth + alphaErr * relReservoir.repDepth;
 					reservoir.repDir = (1.0 - alphaErr) * reservoir.repDir + alphaErr * relReservoir.repDir;
-					++reservoir.itr;
 				}
 			}
 		}
+
 		if (reuse == 0) {
+			// Don't reuse
+
 			uint sampleN = N_min;
 			float4 value = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			for (uint i = 0; i < sampleN; ++i) {
@@ -704,7 +691,6 @@ __global__ void d_renderReSTIR(curandState* d_randStates) {
 
 			reservoir.pixel = value;
 			reservoir.N = sampleN;
-			reservoir.itr = 1;
 		}
 
 		// For test
@@ -930,7 +916,7 @@ __global__ void d_maxVoxelReducRes(float* result) {
 __global__ void d_maxGradReducRes(float* result) {
 	d_maxGrad = *result;
 	d_invMaxGrad = 1.0f / d_maxGrad;
-	printf("Max Gradient: %f\n", d_maxGrad);
+	printf("Max gradient: %f\n", d_maxGrad);
 }
 
 // Calculate gradient of whole volume and the max value

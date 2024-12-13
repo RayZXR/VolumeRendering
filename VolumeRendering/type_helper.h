@@ -49,7 +49,6 @@ struct Path {
 
 struct Reservoir {
 	uint N = 0;					// sample count
-	uint itr = 0;				// iteration count
 	float accErr = 0.0f;		// accumulated error
 	float repDepth = 0.0f;		// representative depth
 	float3 repDepthPos = {};	// epresentative point

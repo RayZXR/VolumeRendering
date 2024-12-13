@@ -18,7 +18,7 @@ using namespace std;
 // char volumeFilePrefix[maxStrLen] = "CThead.";
 const char volumeDir[256] = "Assets/Models/";
 const char envTexDir[256] = "Assets/Textures/";
-const char saveImgDir[256] = "Images/PT_RE2/";
+const char saveImgDir[256] = "Images/";
 
 TransferFunElemType* transferFunc;
 uint transferFuncLen = 101;
